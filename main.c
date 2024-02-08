@@ -4,38 +4,95 @@
 #include <sys/inotify.h>
 #include <unistd.h>
 
+#define BUFFER_SIZE (10 * (sizeof(struct inotify_event) + 255 + 1))
+
 int main(int argc, char* argv[]) {
 
-	if (argc < 2) {
-		printf("Please provide a file to track \n");
-		return 1;
-	}
+	// if (argc < 2) {
+	// 	printf("Please provide a file to track \n");
 
-	// char** fileName = argv + 1;
-	// for (int i = 0; i < argc - 1; ++i) {
-	// 	printf("File[%d]: %s\n", i, fileName[i]);
+	// 	exit(EXIT_FAILURE);
 	// }
 
-	// printf("Read into array");
-	// for (int i = 1; i < argc; ++i) {
-	// 	printf("File[%d]: %s\n", i, fileName[i]);
-	// }
+	FILE* tracker = fopen("track.txt", "w");
+	char* filePath = "/home/heisenberg/projects/track-it/test.txt";
+	char buffer[BUFFER_SIZE];
+
+	printf("Writing to the file %s\n", tracker);
+	printf("The given file is: %s\n\n", filePath);
 
 	// check if the file exists
-
-	if (access(argv[1], F_OK) == -1) {
-		fprintf(stderr, "The provided file: %s, does not exits\n ", argv[1]);
+	if (access(filePath, F_OK) == -1) {
+		fprintf(stderr, "The provided file: %s, does not exits\n ", filePath);
 		exit(EXIT_FAILURE);
 	}
 
-	// int daemonize = daemon(1, 1);
+	// init inotify
 
-	// if (daemonize != 0) {
-	// 	printf("Unable to daemonize process\n");
-	// 	return -1;
-	// }
+	int fileDescriptor = inotify_init();
+
+	if (fileDescriptor == -1) {
+		perror("Unable to initialize inotify instance");
+		exit(EXIT_FAILURE);
+	}
+	printf("Successfully initiated inotify object\n");
+
+	// add file to inotify watch list and listen for all events
+	int watchFile = inotify_add_watch(fileDescriptor, filePath, IN_ALL_EVENTS);
+
+	if (watchFile == -1) {
+		perror("Unable to add file to the watch list");
+		exit(EXIT_FAILURE);
+	}
+
+	printf("Successfully added file: %s to inotify watch list\n", filePath);
 
 	printf("-------Daemon has started--------\n");
 
+	// main daemon loop
+	while (1) {
+
+		int length = read(watchFile, buffer, sizeof(buffer));
+
+		if (length < 0) {
+			perror("Error reading the file descriptor");
+			exit(EXIT_FAILURE);
+		}
+
+		// // check if an event has occurred
+
+		// if (length == 0) continue;	// nothing has happened
+
+		for (int i = 0; i < length; ++i) {
+
+			struct inotify_event* events = (struct inotify_event*)&buffer[i];
+
+			switch (events->mask) {
+				case IN_ACCESS:
+					fprintf(tracker, "The File has been accessed\n");
+					printf("The File has been accessed\n");
+					break;
+				case IN_ATTRIB:
+					fprintf(tracker, "The File has been changed\n");
+					printf("The File's meta data has been changed\n");
+					break;
+
+				case IN_DELETE:
+					printf("The File has been Deleted\n");
+					break;
+				case IN_OPEN:
+					printf("The File has been Opened \n");
+					break;
+				case IN_MODIFY:
+					printf("The File has been Modified \n");
+					break;
+				default:
+					break;
+			}
+			i += sizeof(struct inotify_event) + events->len;
+		}
+	}
+
+	fclose(tracker);
 	return 0;
 }
