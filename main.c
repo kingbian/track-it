@@ -4,21 +4,23 @@
 #include <sys/inotify.h>
 #include <unistd.h>
 
-#define BUFFER_SIZE (10 * (sizeof(struct inotify_event) + 255 + 1))
+#define NAME_MAX 255  // max name for a file
+#define BUFFER_SIZE sizeof(struct inotify_event) + NAME_MAX + 1
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
 
-	// if (argc < 2) {
-	// 	printf("Please provide a file to track \n");
+	if (argc < 2) {
+		printf("Please provide a file to track \n");
 
-	// 	exit(EXIT_FAILURE);
-	// }
+		exit(EXIT_FAILURE);
+	}
 
-	FILE* tracker = fopen("track.txt", "w");
-	char* filePath = "/home/heisenberg/projects/track-it/test.txt";
-	char buffer[BUFFER_SIZE];
+	char *filePath = argv[1];
+	char buffer[4090];
+	ssize_t length;
 
-	printf("Writing to the file %s\n", tracker);
+	const struct inotify_event *events;
+
 	printf("The given file is: %s\n\n", filePath);
 
 	// check if the file exists
@@ -28,7 +30,6 @@ int main(int argc, char* argv[]) {
 	}
 
 	// init inotify
-
 	int fileDescriptor = inotify_init();
 
 	if (fileDescriptor == -1) {
@@ -45,54 +46,41 @@ int main(int argc, char* argv[]) {
 		exit(EXIT_FAILURE);
 	}
 
-	printf("Successfully added file: %s to inotify watch list\n", filePath);
-
 	printf("-------Daemon has started--------\n");
 
 	// main daemon loop
 	while (1) {
 
-		int length = read(watchFile, buffer, sizeof(buffer));
+		length = read(fileDescriptor, buffer, sizeof(buffer));
 
-		if (length < 0) {
+		if (length <= 0) {
 			perror("Error reading the file descriptor");
-			exit(EXIT_FAILURE);
+			break;	// TODO: why break
 		}
 
-		// // check if an event has occurred
+		for (char *bufferPtr = buffer; bufferPtr < buffer + length;
+			 bufferPtr += sizeof(struct inotify_event) + events->len) {
 
-		// if (length == 0) continue;	// nothing has happened
+			events = (const struct inotify_event *)bufferPtr;
 
-		for (int i = 0; i < length; ++i) {
+			if (events->mask & IN_ACCESS)
+				printf("The File has been accessed\n");
 
-			struct inotify_event* events = (struct inotify_event*)&buffer[i];
+			if (events->mask & IN_DELETE)
+				printf("The File has been Deleted\n");
 
-			switch (events->mask) {
-				case IN_ACCESS:
-					fprintf(tracker, "The File has been accessed\n");
-					printf("The File has been accessed\n");
-					break;
-				case IN_ATTRIB:
-					fprintf(tracker, "The File has been changed\n");
-					printf("The File's meta data has been changed\n");
-					break;
+			if (events->mask & IN_MODIFY)
+				printf("The File has been Modified \n");
 
-				case IN_DELETE:
-					printf("The File has been Deleted\n");
-					break;
-				case IN_OPEN:
-					printf("The File has been Opened \n");
-					break;
-				case IN_MODIFY:
-					printf("The File has been Modified \n");
-					break;
-				default:
-					break;
-			}
-			i += sizeof(struct inotify_event) + events->len;
+			if (events->mask & IN_CLOSE_WRITE)
+				printf("The file was written to and closed \n");
 		}
 	}
 
-	fclose(tracker);
+	// i += sizeof(struct inotify_event) + events->len;
+
+	if (close(fileDescriptor)) {
+		printf("error closing the file descriptor\n");
+	}
 	return 0;
 }
