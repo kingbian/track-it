@@ -1,4 +1,6 @@
 #include <fcntl.h>
+#include <gio/gio.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/inotify.h>
@@ -6,6 +8,8 @@
 
 #define NAME_MAX 255  // max name for a file
 #define BUFFER_SIZE sizeof(struct inotify_event) + NAME_MAX + 1
+
+void sendNotification(char *message, char *fileName, char *event);
 
 int main(int argc, char *argv[]) {
 
@@ -19,7 +23,7 @@ int main(int argc, char *argv[]) {
 	char buffer[4090];
 	ssize_t length;
 
-	const struct inotify_event *events;
+	struct inotify_event *events;
 
 	printf("The given file is: %s\n\n", filePath);
 
@@ -49,6 +53,10 @@ int main(int argc, char *argv[]) {
 	printf("-------Daemon has started--------\n");
 
 	// main daemon loop
+	printf("Waiting for events to happen 1\n");
+
+	char *message, *file, *event;
+	message = file = event = NULL;
 	while (1) {
 
 		length = read(fileDescriptor, buffer, sizeof(buffer));
@@ -61,19 +69,39 @@ int main(int argc, char *argv[]) {
 		for (char *bufferPtr = buffer; bufferPtr < buffer + length;
 			 bufferPtr += sizeof(struct inotify_event) + events->len) {
 
-			events = (const struct inotify_event *)bufferPtr;
+			events = (struct inotify_event *)bufferPtr;
 
-			if (events->mask & IN_ACCESS)
-				printf("The File has been accessed\n");
+			if (events->mask & IN_ACCESS) {
 
-			if (events->mask & IN_DELETE)
-				printf("The File has been Deleted\n");
+				event = "File Access";
+				message = "The File has been accessed\n";
+			}
 
-			if (events->mask & IN_MODIFY)
-				printf("The File has been Modified \n");
+			if (events->mask & IN_DELETE) {
 
-			if (events->mask & IN_CLOSE_WRITE)
-				printf("The file was written to and closed \n");
+				event = "File Deleted: ";
+				message = "The File has been Deleted\n";
+			}
+
+			if (events->mask & IN_MODIFY) {
+
+				event = "File was modified";
+				message = "The File has been Modified \n";
+			}
+
+			if (events->mask & IN_CLOSE_WRITE) {
+				event = "File  write/close";
+				message = "The file was written to and closed \n";
+			}
+
+			if (events->len > 0) {
+				printf("THe file name is: %s\n", events->name);
+			}
+			file = events->name;
+		}
+
+		if (message) {
+			sendNotification(message, file, event);
 		}
 	}
 
@@ -83,4 +111,29 @@ int main(int argc, char *argv[]) {
 		printf("error closing the file descriptor\n");
 	}
 	return 0;
+}
+
+/**
+ * The implementation of this function was provided by
+ *<https://wiki.archlinux.org/title/Desktop_notifications
+ */
+
+void sendNotification(char *message, char *fileName, char *event) {
+
+	// format the notification title
+	char notificationTitle[NAME_MAX + 100];
+	snprintf(notificationTitle, sizeof(notificationTitle), "%s: %s", fileName, event);
+
+	GApplication *application = g_application_new("hello.world", G_APPLICATION_DEFAULT_FLAGS);
+	g_application_register(application, NULL, NULL);
+	GNotification *notification = g_notification_new(notificationTitle);
+	g_notification_set_body(notification, message);
+
+	g_notification_set_priority(notification, G_NOTIFICATION_PRIORITY_HIGH);
+	GIcon *icon = g_themed_icon_new("dialog-warning");
+	g_notification_set_icon(notification, icon);
+	g_application_send_notification(application, NULL, notification);
+	g_object_unref(icon);
+	g_object_unref(notification);
+	g_object_unref(application);
 }
