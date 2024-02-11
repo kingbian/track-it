@@ -1,7 +1,0 @@
-[Unit]
-Description=A Daemon for File Tracking
-Wants= 
-
-
-[Service]
-ExecStart=/usr/local/bin/track_it
