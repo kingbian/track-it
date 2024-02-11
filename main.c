@@ -1,5 +1,4 @@
 #include <fcntl.h>
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/inotify.h>
@@ -9,6 +8,7 @@
 #define BUFFER_SIZE sizeof(struct inotify_event) + NAME_MAX + 1
 
 void sendNotification(char *message, char *fileName, char *event);
+void daemonize(int fd, int watchFile, char *filePath);
 
 int main(int argc, char *argv[]) {
 
@@ -19,12 +19,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	char *filePath = argv[1];
-	char buffer[4090];
 	ssize_t length;
-
-	struct inotify_event *events;
-
-	printf("The given file is: %s\n\n", filePath);
 
 	// check if the file exists
 	if (access(filePath, F_OK) == -1) {
@@ -39,7 +34,6 @@ int main(int argc, char *argv[]) {
 		perror("Unable to initialize inotify instance");
 		exit(EXIT_FAILURE);
 	}
-	printf("Successfully initiated inotify object\n");
 
 	// add file to inotify watch list and listen for all events
 	int watchFile = inotify_add_watch(fileDescriptor, filePath, IN_ALL_EVENTS);
@@ -51,24 +45,47 @@ int main(int argc, char *argv[]) {
 
 	printf("-------Daemon has started--------\n");
 
-	// main daemon loop
+	daemonize(fileDescriptor, watchFile, filePath);
+
+	if (close(fileDescriptor)) {
+		printf("error closing the file descriptor\n");
+	}
+	return 0;
+}
+
+/**
+ * function to daemonize the program
+ *
+ */
+
+void daemonize(int fd, int watchFile, char *filePath) {
+
 	char *message, *file, *event;
+	ssize_t length = -1;
+
+	struct inotify_event *events;
+	char buffer[4090];
 	message = file = event = NULL;
+
+	// main daemon loop
 	while (1) {
 
-		length = read(fileDescriptor, buffer, sizeof(buffer));
+		length = read(fd, buffer, sizeof(buffer));
 
 		if (length <= 0) {
 			perror("Error reading the file descriptor");
 			break;
 		}
 
-		for (char *bufferPtr = buffer; bufferPtr < buffer + length;
-			 bufferPtr += sizeof(struct inotify_event) + events->len) {
+		char *eventPtr = buffer;
 
-			events = (struct inotify_event *)bufferPtr;
+		message = NULL;
+		// iterate over the events
+		while (eventPtr < buffer + length) {
 
-			if (events->mask & IN_ACCESS) {
+			events = (struct inotify_event *)eventPtr;
+
+			if (events->mask & IN_ACCESS || events->mask & IN_OPEN) {
 
 				event = "File Access";
 				message = "The File has been accessed\n";
@@ -91,29 +108,16 @@ int main(int argc, char *argv[]) {
 				message = "The file was written to and closed \n";
 			}
 
-			// if (events->len > 0) {
-			// 	printf("THe file name is: %s\n", events->name);
-			// }
-			// file = events->name;
+			// increment eventPtr position in the buffer
+			long eventSize = sizeof(struct inotify_event) + events->len;
+			eventPtr += eventSize;
 		}
 
 		if (message) {
 			sendNotification(message, filePath, event);
 		}
 	}
-
-	// i += sizeof(struct inotify_event) + events->len;
-
-	if (close(fileDescriptor)) {
-		printf("error closing the file descriptor\n");
-	}
-	return 0;
 }
-
-/**
- * The implementation of this function was provided by
- *<https://wiki.archlinux.org/title/Desktop_notifications
- */
 
 void sendNotification(char *message, char *fileName, char *event) {
 
