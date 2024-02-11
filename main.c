@@ -1,5 +1,4 @@
 #include <fcntl.h>
-#include <gio/gio.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -53,8 +52,6 @@ int main(int argc, char *argv[]) {
 	printf("-------Daemon has started--------\n");
 
 	// main daemon loop
-	printf("Waiting for events to happen 1\n");
-
 	char *message, *file, *event;
 	message = file = event = NULL;
 	while (1) {
@@ -63,7 +60,7 @@ int main(int argc, char *argv[]) {
 
 		if (length <= 0) {
 			perror("Error reading the file descriptor");
-			break;	// TODO: why break
+			break;
 		}
 
 		for (char *bufferPtr = buffer; bufferPtr < buffer + length;
@@ -94,14 +91,14 @@ int main(int argc, char *argv[]) {
 				message = "The file was written to and closed \n";
 			}
 
-			if (events->len > 0) {
-				printf("THe file name is: %s\n", events->name);
-			}
-			file = events->name;
+			// if (events->len > 0) {
+			// 	printf("THe file name is: %s\n", events->name);
+			// }
+			// file = events->name;
 		}
 
 		if (message) {
-			sendNotification(message, file, event);
+			sendNotification(message, filePath, event);
 		}
 	}
 
@@ -123,17 +120,8 @@ void sendNotification(char *message, char *fileName, char *event) {
 	// format the notification title
 	char notificationTitle[NAME_MAX + 100];
 	snprintf(notificationTitle, sizeof(notificationTitle), "%s: %s", fileName, event);
+	char command[NAME_MAX + 100];
 
-	GApplication *application = g_application_new("hello.world", G_APPLICATION_DEFAULT_FLAGS);
-	g_application_register(application, NULL, NULL);
-	GNotification *notification = g_notification_new(notificationTitle);
-	g_notification_set_body(notification, message);
-
-	g_notification_set_priority(notification, G_NOTIFICATION_PRIORITY_HIGH);
-	GIcon *icon = g_themed_icon_new("dialog-warning");
-	g_notification_set_icon(notification, icon);
-	g_application_send_notification(application, NULL, notification);
-	g_object_unref(icon);
-	g_object_unref(notification);
-	g_object_unref(application);
+	sprintf(command, "notify-send '%s' '%s'", notificationTitle, message);
+	system(command);
 }
