@@ -48,6 +48,8 @@ kill track_it
 
 ## Screen shots
 
+![Alt text](screen_shots/image.png) ![Alt text](screen_shots/image-1.png) ![Alt text](screen_shots/image-2.png)
+
 ## Dependencies
 
 - `libnotify` used for desktop notifications
