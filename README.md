@@ -1,12 +1,12 @@
-# File Change Tracker "Daemon"
+# File and Directory Tracker Daemon
 
-This program tracks changes made to a specified file and sends notifications when certain events occur. It runs as a "daemon" on Linux systems.
+This program tracks changes made to a specified file(s)/directories and sends notifications when certain events occur. It runs as a "daemon" on Unix systems.
 
 ## Features
 
 - Monitors file access, deletion, modification, and write/close events.
-- Sends desktop notifications using `notify-send` when significant file events are detected.
-- Runs as a background, allowing continuous monitoring of file changes.
+- Sends desktop notifications using `libnotify` when significant file events are detected.
+- Runs as a background, allowing continuous monitoring of file/directory changes.
 
 ## Installation
 
@@ -16,13 +16,17 @@ This program tracks changes made to a specified file and sends notifications whe
 git clone https://github.com/kingbian/track-it.git
 ```
 
-2. Compile the program
+## Compile
+
+1. Compile the program using:
 
 ```
-gcc -o track_it trackIt.c
+gcc -o track_it `pkg-config --cflags --libs libnotify`  trackIt.c
 ```
 
-3. move the executable to your systems PATH to make it accessible system wide
+- `libnotify is required`
+
+2. Copy the executable to your systems PATH to make it accessible system wide
 
 ```
 sudo cp track_it /usr/local/bin
@@ -33,7 +37,7 @@ sudo cp track_it /usr/local/bin
 #### To start the program as a background process
 
 ```
-track_it /path/to/file
+track_it /path/to/file /path/to/directory &
 ```
 
 #### To end the program
@@ -41,6 +45,8 @@ track_it /path/to/file
 ```
 kill track_it
 ```
+
+## Screen shots
 
 ## Dependencies
 
